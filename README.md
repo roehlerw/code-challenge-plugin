@@ -43,3 +43,7 @@ For details about the contract, see the comments in [./plugin.proto](./plugin.pr
 > The contract includes fields where you can place the inferred type of properties, and field for indicating that
 > a record does not conform to the inferred schema. Consider population of these fields extra credit - it may be very 
 > difficult (or impossible) to accurately infer the correct values, but we will be impressed if you can.
+
+### Workflow
+
+If you want to attempt this challenge, fork this repo, push your solution, then send a pull request for us to review. Looking at other people's pull requests before you've completed your own solution is rude. 
