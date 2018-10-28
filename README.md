@@ -34,8 +34,12 @@ The plugin should allow insecure connections.
 The plugin must stop streaming data and exit with code 0 if it receives an
 SIGINT or SIGKILL.
 
-The gRPC server the plugin starts must fulfil the contract defined in [./plugin.proto](./plugin.proto). The host will first call the Discover service and will expect to get back a listing of schemas. Then it will
-call the Publish service for each schema and will expect to be streamed
+The gRPC server the plugin starts must fulfil the contract defined in [./plugin.proto](./plugin.proto). The host will first call the Discover method and will expect to get back a listing of schemas. Then it will
+call the Publish method for each schema and will expect to be streamed
 the data from the files for that schema.
 
 For details about the contract, see the comments in [./plugin.proto](./plugin.proto).
+
+> The contract includes fields where you can place the inferred type of properties, and field for indicating that
+> a record does not conform to the inferred schema. Consider population of these fields extra credit - it may be very 
+> difficult (or impossible) to accurately infer the correct values, but we will be impressed if you can.
