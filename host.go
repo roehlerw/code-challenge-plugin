@@ -36,11 +36,11 @@ func main() {
 		log.Fatal("expected at least one argument, the command to start the plugin (and its arguments, if any)")
 	}
 
-	stdoutReader, stdouthWriter := io.Pipe()
+	stdoutReader, stdoutWriter := io.Pipe()
 	cmd := exec.Command(os.Args[1], os.Args[2:]...)
 
 	cmd.Stderr = os.Stdout
-	cmd.Stdout = stdouthWriter
+	cmd.Stdout = stdoutWriter
 
 	exitCh := make(chan int)
 	portCh := make(chan int)
@@ -72,7 +72,8 @@ func main() {
 
 func runTests(port int) error {
 	addr := fmt.Sprintf("localhost:%d", port)
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	ctx, _ := context.WithTimeout(context.Background(), 1 * time.Second)
+	conn, err := grpc.DialContext(ctx, addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(500))
 	if err != nil {
 		return errors.WithMessage(err, "connection failed")
 	}
@@ -81,7 +82,7 @@ func runTests(port int) error {
 
 	pwd, _ := os.Getwd()
 	tests := []test{
-		&testCase{
+		&standardTestCase{
 			n:               "animals",
 			d:               `This test exercises schema type discovery, because "animals.csv" has multiple data types`,
 			glob:            filepath.Join(pwd, "./data/animals.csv"),
@@ -95,7 +96,7 @@ func runTests(port int) error {
 				bonusRecordCheck(3, "1796-07-23T00:00:00Z", false, ` because "last spotted" column should be parsed as date`),
 			},
 		},
-		&testCase{
+		&standardTestCase{
 			n:               "logs",
 			d:               "This test checks that schemas are based on headers in files, and that the plugin can handle complex data.",
 			glob:            filepath.Join(pwd, "./data/*.csv"),
@@ -108,7 +109,7 @@ func runTests(port int) error {
 				bonusRecordCheck(2, float64(27.78092), false, " because magnitude should be parsed as number"),
 			},
 		},
-		&testCase{
+		&standardTestCase{
 			n:               "people",
 			d:               "This test checks that the plugin can publishes large amounts of data quickly.",
 			glob:            filepath.Join(pwd, "./data/people.*.csv"),
@@ -135,11 +136,12 @@ func runTests(port int) error {
 		flog.Println(strings.Repeat("-", 50))
 
 		result := t.execute(client)
+		result.test = t
 		if result.err != nil {
 			failCount++
-			log.Print(color.RedString("test %s failed: %s"), t.name, result.err)
+			log.Print(color.RedString("test %s failed: %s"), t.name(), result.err)
 		} else {
-			log.Print(color.GreenString("test %s passed"), t.name)
+			log.Print(color.GreenString("test %s passed"), t.name())
 		}
 		results = append(results, result)
 	}
@@ -276,7 +278,7 @@ type test interface {
 	description() string
 }
 
-type testCase struct {
+type standardTestCase struct {
 	n               string
 	d               string
 	glob            string
@@ -287,11 +289,11 @@ type testCase struct {
 	comments        []string
 }
 
-func (t *testCase) name() string {
+func (t *standardTestCase) name() string {
 	return t.n
 }
 
-func (t *testCase) description() string {
+func (t *standardTestCase) description() string {
 	return t.d
 }
 
@@ -380,7 +382,7 @@ func (r expectedRecords) evaluate(record *plugin.PublishRecord) {
 	}
 }
 
-func (t *testCase) execute(client plugin.PluginClient) *testResult {
+func (t *standardTestCase) execute(client plugin.PluginClient) *testResult {
 	result := &testResult{
 		test: t,
 	}
@@ -442,6 +444,11 @@ func (t *testCase) execute(client plugin.PluginClient) *testResult {
 		j, _ = json.MarshalIndent(record, "", "  ")
 		flog.Println(string(j))
 		t.recordChecks.evaluate(record)
+
+		if count == 10 {
+			result.log("pausing for 1 seconds")
+			<-time.After(1*time.Second)
+		}
 	}
 	result.log("publish completed, analyzing data...")
 
@@ -505,3 +512,42 @@ func checkSchema(want plugin.Schema, have *plugin.Schema) (namesMatch bool, type
 	}
 	return
 }
+
+
+//
+//
+// type funcTestCase struct {
+// 	n string
+// 	d string
+// 	fn func(client plugin.PluginClient) (*testResult)
+// }
+//
+// func (t funcTestCase) execute(client plugin.PluginClient) (*testResult) {
+// 	return t.fn(client)
+// }
+//
+// func (t funcTestCase) name() string {
+// 	return t.n
+// }
+//
+// func (t funcTestCase) description() string {
+// 	return t.d
+// }
+//
+// func cancelTestImpl(client plugin.PluginClient) (*testResult) {
+// 	return nil
+// }
+//
+//
+// func getPeopleSchema(client plugin.PluginClient) (*plugin.Schema, error) {
+// 	settings := &plugin.Settings{
+// 		FileGlob: "data/people.1.csv",
+// 	}
+// 	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+// 	discover, err := client.Discover(ctx, &plugin.DiscoverRequest{
+// 		Settings: settings,
+// 	})
+// 	if err != nil {
+// 		return nil, errors.WithMessage(err, "discovery failed")
+// 	}
+// }
