@@ -1,0 +1,77 @@
+syntax = "proto3";
+package plugin;
+
+service Plugin {
+    rpc Discover (DiscoverRequest) returns (DiscoverResponse) {
+    }
+    rpc Publish (PublishRequest) returns (stream PublishRecord) {
+    }
+}
+
+// The request message containing the user's name.
+message DiscoverRequest {
+    // In a real plugin the settings would be conveyed in a JSON object
+    // with a schema defined by the plugin and populated by a user through a UI.
+    // For this challenge we'll define a message for the settings
+    // to make it easier for the host to create the settings.
+    Settings settings = 1;
+}
+
+message Settings {
+    // This a glob specifying the pattern to use to find files.
+    // This will be an absolute path something like /src/data/*/*.csv.
+    // The plugin should find all files matching the pattern, then
+    // analyze them to find the unique schemas among them (multiple files
+    // may have the same schema).
+    //
+    // For this challenge you can assume that all CSV files have a header row,
+    // and that all files are comma delimited
+    string fileGlob = 1;
+}
+
+message DiscoverResponse {
+    // Array of schemas discovered.
+    repeated Schema schemas = 1;
+}
+
+message Schema {
+    // The unique name of the schema; if there is no unique name
+    // the plugin can generate one.
+    string name = 1;
+    // The settings the plugin will use for publishing when
+    // this schema is included in a PublishRequest. This
+    // can be any data the plugin wants to capture; the host
+    // will treat it as an opaque blob.
+    // Hint: this is a good place to store the file paths of all the
+    // files which contain records with this schema.
+    string settings = 2;
+    // Array of the properties discovered for this schema.
+    repeated Property properties = 3;
+}
+
+message Property {
+    // Name of the property, from the column header.
+    string name = 1;
+    // Type of the property; can be "string", "integer", "number", "datetime", "boolean"
+    // This should be inferred if possible by analyzing the data.
+    string type = 2;
+}
+
+message PublishRequest {
+    Settings settings = 1;
+    Schema schema = 2;
+}
+
+message PublishRecord {
+    // This should be set to true if the record is not valid
+    // because it violates the inferred schema in some way.
+    // The invalid property should be written as `null` in data.
+    bool invalid = 1;
+
+    // If the record is invalid this field should explain why.
+    // This should include the property name and the original value.
+    string error = 2;
+    // Data contains the values for a single record.
+    // The values should be provided as a JSON serialized array.
+    string data = 3;
+}
