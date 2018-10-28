@@ -2,10 +2,6 @@
 
 In this code challenge you will construct a simplified version of the kind of plugin that Naveego uses to discover and collect data. The plugin will be responsible for discovering and collecting data from CSV files.
 
-This challenge is intended to be a realistic test of your ability
-to write production-ready code given a description of the problem.
-Your solution will be assessed based on
-
 ### Scenario
 
 Our plugin framework uses gRPC for communication. In reality we use the Hashicorp [go-plugin](https://github.com/hashicorp/go-plugin) framework, but
@@ -40,10 +36,18 @@ the data from the files for that schema.
 
 For details about the contract, see the comments in [./plugin.proto](./plugin.proto).
 
-> The contract includes fields where you can place the inferred type of properties, and field for indicating that
-> a record does not conform to the inferred schema. Consider population of these fields extra credit - it may be very 
-> difficult (or impossible) to accurately infer the correct values, but we will be impressed if you can.
 
 ### Workflow
 
 If you want to attempt this challenge, fork this repo, push your solution, then send a pull request for us to review. Looking at other people's pull requests before you've completed your own solution is rude. 
+
+Your solution will be evaluated on several dimensions:
+
+1. Accuracy: Your code should pass the tests as run by the host. 
+2. Clarity: Your code should be easy to understand and read. It should also be easy to extend in the future,
+as plugin contracts evolve.
+3. Production readiness: Your code should provide sufficient logging information to support debugging production issues. 
+It should also provide good, helpful error messages when things go wrong, and it should try very hard not to silently crash.
+4. Sophistication: The contract includes fields where you can place the inferred type of properties, and fields for indicating that 
+a record does not conform to the inferred schema. Consider population of these fields extra credit - it may be very 
+ difficult (or impossible) to accurately infer the correct values, but we will be impressed if you can.
