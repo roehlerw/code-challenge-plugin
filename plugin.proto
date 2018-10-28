@@ -52,7 +52,7 @@ message Schema {
 message Property {
     // Name of the property, from the column header.
     string name = 1;
-    // Type of the property; can be "string", "integer", "number", "datetime", "boolean"
+    // Type of the property; can be "string", "number", "datetime", "boolean"
     // This should be inferred if possible by analyzing the data.
     string type = 2;
 }

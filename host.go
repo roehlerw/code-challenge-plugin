@@ -16,6 +16,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -63,11 +64,9 @@ func main() {
 		os.Exit(exitCode)
 	case port := <-portCh:
 		err := runTests(port)
-		log.Println("see .log file for all data processed")
 		if err != nil {
-			log.Fatalf("tests failed: %s", err)
+			os.Exit(1)
 		}
-		log.Printf("done")
 	}
 }
 
@@ -81,57 +80,95 @@ func runTests(port int) error {
 	client := plugin.NewPluginClient(conn)
 
 	pwd, _ := os.Getwd()
-	tests := []*testCase{
-		{
-			name:            "animals",
+	tests := []test{
+		&testCase{
+			n:               "animals",
+			d:               `This test exercises schema type discovery, because "animals.csv" has multiple data types`,
 			glob:            filepath.Join(pwd, "./data/animals.csv"),
 			expectedCount:   100,
 			publishSchema:   schemaAnimals,
 			expectedSchemas: []plugin.Schema{schemaAnimals},
-			description:     "schema has multiple data types",
-			expectedRecords: []*expectedRecord{
-				{1, "Macropus fuliginosus", true, nil},
-				{1, "Ciconia ciconia", false, nil},
+			recordChecks: expectedRecords{
+				requiredRecordCheck(1, "Vulpes chama"),
+				bonusRecordCheck(1, "Macropus fuliginosus", true, " because blue is not a valid boolean"),
+				bonusRecordCheck(0, float64(52), false, " because id column should be parsed as number"),
+				bonusRecordCheck(3, "1796-07-23T00:00:00Z", false, ` because "last spotted" column should be parsed as date`),
 			},
 		},
-		{
-			name:            "logs",
+		&testCase{
+			n:               "logs",
+			d:               "This test checks that schemas are based on headers in files, and that the plugin can handle complex data.",
 			glob:            filepath.Join(pwd, "./data/*.csv"),
 			expectedCount:   300,
 			publishSchema:   schemaLogs,
 			expectedSchemas: []plugin.Schema{schemaAnimals, schemaLogs, schemaPeople},
-			description:     "schemas should be identified from headers",
+			recordChecks: expectedRecords{
+				requiredRecordCheck(1, "社會科學院語學研究所"),
+				requiredRecordCheck(1, "Ω≈ç√∫˜µ≤≥÷"),
+				bonusRecordCheck(2, float64(27.78092), false, " because magnitude should be parsed as number"),
+			},
 		},
-		{
-			name:            "people",
+		&testCase{
+			n:               "people",
+			d:               "This test checks that the plugin can publishes large amounts of data quickly.",
 			glob:            filepath.Join(pwd, "./data/people.*.csv"),
 			expectedCount:   3000,
 			publishSchema:   schemaPeople,
 			expectedSchemas: []plugin.Schema{schemaLogs, schemaPeople},
-			description:     "plugin should publish quickly",
+			recordChecks: expectedRecords{
+				requiredRecordCheck(3, "lroylr4@indiatimes.com"),
+				requiredRecordCheck(3, "mbranstoncs@mit.edu"),
+				requiredRecordCheck(3, "bmageei@linkedin.com"),
+			},
 		},
 	}
 
-	for _, t := range tests {
-		log.Printf("executing test %q", t.name)
+	var results []*testResult
+	total := len(tests)
+	failCount := 0
+
+	for i, t := range tests {
+		log.Printf("%d/%d: executing test %q", i+1, total, t.name)
 		log.Printf("description: %s", t.description)
-		flog.Println()
+		flog.Println(strings.Repeat("-", 50))
 		flog.Print(t.name)
-		flog.Println()
+		flog.Println(strings.Repeat("-", 50))
 
-		if err := t.execute(client); err != nil {
-			return err
+		result := t.execute(client)
+		if result.err != nil {
+			failCount++
+			log.Print(color.RedString("test %s failed: %s"), t.name, result.err)
+		} else {
+			log.Print(color.GreenString("test %s passed"), t.name)
 		}
-	}
-	log.Print("all tests passed")
-	log.Print("comments:")
-	for _, t := range tests {
-		for _, c := range t.comments {
-			log.Printf("test %q: %s", t.name, c)
-		}
+		results = append(results, result)
 	}
 
-	return nil
+	color.Blue("RESULTS")
+	good := color.New(color.Bold, color.FgGreen)
+	bad := color.New(color.Bold, color.FgRed)
+	for _, result := range results {
+		fmt.Printf("%s: ", result.test.name())
+		if result.err != nil {
+			bad.Printf("failed: %s\n", result.err)
+		} else {
+			good.Println("passed")
+		}
+		color.New(color.Faint, color.FgWhite).Printf("  %s\n", result.test.description())
+		for _, c := range result.comments {
+			fmt.Println("  " + c)
+		}
+	}
+
+	if failCount == 0 {
+		good.Println("PASSED")
+		return nil
+	} else {
+		bad.Printf("%d TESTS FAILED", failCount)
+		color.Yellow("see .log file for all data processed")
+
+		return errors.New("failed")
+	}
 }
 
 func handleUserExit(cmd *exec.Cmd) {
@@ -233,42 +270,121 @@ var schemaLogs = plugin.Schema{
 	},
 }
 
+type test interface {
+	execute(client plugin.PluginClient) (*testResult)
+	name() string
+	description() string
+}
+
 type testCase struct {
-	name            string
-	description     string
+	n               string
+	d               string
 	glob            string
 	expectedSchemas []plugin.Schema
 	publishSchema   plugin.Schema
-	expectedRecords expectedRecords
+	recordChecks    expectedRecords
 	expectedCount   int
 	comments        []string
 }
 
-type expectedRecord struct {
-	matchIndex int
-	matchValue interface{}
-	invalid    bool
-	match      *plugin.PublishRecord
+func (t *testCase) name() string {
+	return t.n
 }
 
-type expectedRecords []*expectedRecord
+func (t *testCase) description() string {
+	return t.d
+}
 
-func (r expectedRecords) evaluate(record *plugin.PublishRecord) {
-	for i := range r {
-		e := r[i]
-		var data []interface{}
-		json.Unmarshal([]byte(record.Data), &data)
-		if data[e.matchIndex] == e.matchValue {
-			e.match = record
+type testResult struct {
+	test     test
+	err      error
+	comments []string
+}
+
+func (t *testResult) withErr(err error) *testResult {
+	t.err = err
+	return t
+}
+
+func (t *testResult) comment(format string, args ...interface{}) *testResult {
+	if len(format) > 0 {
+		t.comments = append(t.comments, fmt.Sprintf(format, args...))
+	}
+	return t
+}
+
+func (c *testResult) log(format string, args ...interface{}) {
+	log.Printf(color.CyanString(c.test.name()+": ")+format, args...)
+}
+
+type recordCheck struct {
+	matchIndex      int
+	matchValue      interface{}
+	isBonus         bool
+	shouldBeInvalid bool
+	match           *plugin.PublishRecord
+	reason          string
+}
+
+func requiredRecordCheck(index int, value interface{}) *recordCheck {
+	return &recordCheck{
+		matchIndex: index,
+		matchValue: value,
+	}
+}
+
+func bonusRecordCheck(index int, value interface{}, invalid bool, reason string) *recordCheck {
+	return &recordCheck{
+		matchIndex:      index,
+		matchValue:      value,
+		isBonus:         true,
+		shouldBeInvalid: invalid,
+		reason:          reason,
+	}
+}
+
+func (r *recordCheck) evaluate(record *plugin.PublishRecord, data []interface{}) {
+	if r.match != nil {
+		return
+	}
+	if data[r.matchIndex] == r.matchValue {
+		r.match = record
+	}
+}
+
+func (r *recordCheck) result() (ok bool, msg string) {
+	if r.match == nil {
+		return false, color.RedString("expected to see a record with value %v at data index %d%s", r.matchValue, r.matchIndex, r.reason)
+	} else {
+		if r.shouldBeInvalid {
+			if r.match.Invalid {
+				return true, color.GreenString("detected invalid record { %s }", r.match)
+			} else {
+				return false, color.RedString("record should have been marked invalid%s: { %s }", r.reason, r.match)
+			}
+		} else {
+			return true, color.GreenString("detected invalid record { %s }", r.match)
 		}
 	}
 }
 
-func (t *testCase) execute(client plugin.PluginClient) error {
-	l := func(f string, args ...interface{}) {
-		log.Printf("test "+t.name+": "+f, args...)
+type expectedRecords []*recordCheck
+
+func (r expectedRecords) evaluate(record *plugin.PublishRecord) {
+	var data []interface{}
+	json.Unmarshal([]byte(record.Data), &data)
+	for _, expected := range r {
+		if data[expected.matchIndex] == expected.matchValue {
+			expected.match = record
+		}
 	}
-	l("executing discover...")
+}
+
+func (t *testCase) execute(client plugin.PluginClient) *testResult {
+	result := &testResult{
+		test: t,
+	}
+	result.log("executing discover...")
 
 	settings := &plugin.Settings{
 		FileGlob: t.glob,
@@ -278,10 +394,10 @@ func (t *testCase) execute(client plugin.PluginClient) error {
 		Settings: settings,
 	})
 	if err != nil {
-		return errors.WithMessage(err, "discovery failed")
+		return result.withErr(errors.WithMessage(err, "discovery failed"))
 	}
-	l("discover completed: %s", discover)
-	l("scoring discover...")
+	result.log("discover completed: %s", discover)
+	result.log("scoring discover...")
 
 	j, _ := json.MarshalIndent(discover, "", "  ")
 	flog.Println("discover response:")
@@ -290,16 +406,16 @@ func (t *testCase) execute(client plugin.PluginClient) error {
 	for _, want := range t.expectedSchemas {
 		namesMatch, typesMatch := checkSchemaIn(want, discover.Schemas)
 		if !namesMatch {
-			return errors.Errorf("no schema matclng %q was discovered (want: %s, got: %s)", want.Name, want, discover.Schemas)
+			return result.withErr(errors.Errorf("no schema matclng %q was discovered (want: %s, got: %s)", want.Name, want, discover.Schemas))
 		}
 		if typesMatch {
-			t.comments = append(t.comments, color.GreenString("inferred types on schema %s: ", want.Name) + want.String())
+			result.comment(color.GreenString("inferred types on schema %s: ", want.Name) + want.String())
 		} else {
-			t.comments = append(t.comments, color.RedString("did not infer types on schema %s: ", want.Name) + want.String())
+			result.comment(color.RedString("did not infer types on schema %s: ", want.Name) + want.String())
 		}
 	}
-	l("discover looks correct")
-	l("executing publish...")
+	result.log("discover looks correct")
+	result.log("executing publish...")
 	flog.Println()
 
 	targetSchema := findSchemaIn(t.publishSchema, discover.Schemas)
@@ -310,7 +426,7 @@ func (t *testCase) execute(client plugin.PluginClient) error {
 		Schema:   targetSchema,
 	})
 	if err != nil {
-		return errors.Wrap(err, "publish failed")
+		return result.withErr(errors.Wrap(err, "publish failed"))
 	}
 
 	var count = 0
@@ -320,36 +436,36 @@ func (t *testCase) execute(client plugin.PluginClient) error {
 			break
 		}
 		if err != nil {
-			return errors.Errorf("publish error on record %d: %s", count, err)
+			return result.withErr(errors.Errorf("publish error on record %d: %s", count, err))
 		}
 		count++
-		j, _ = json.Marshal(record)
+		j, _ = json.MarshalIndent(record, "", "  ")
 		flog.Println(string(j))
-		t.expectedRecords.evaluate(record)
+		t.recordChecks.evaluate(record)
 	}
-	l("publish completed, analyzing data...")
+	result.log("publish completed, analyzing data...")
 
 	if count != t.expectedCount {
-		return errors.Errorf("publish did not return the right number of records (wanted %d, got %d)", t.expectedCount, count)
+		return result.withErr(errors.Errorf("publish did not return the right number of records (wanted %d, got %d)", t.expectedCount, count))
 	}
 
-	l("publish has correct count, %d", count)
+	result.log("publish has correct count, %d", count)
 
-	for _, e := range t.expectedRecords {
-		if e.match == nil {
-			return errors.Errorf("record not published (should have had record with %v at data index %d)", e.matchValue, e.matchIndex)
-		}
-		if e.invalid {
-			if e.match.Invalid {
-				t.comments = append(t.comments, color.GreenString("detected invalid record: ")+e.match.String())
+	for _, e := range t.recordChecks {
+		ok, msg := e.result()
+		if ok {
+			result.comment(msg)
+		} else {
+			if e.isBonus {
+				result.comment(msg)
 			} else {
-				t.comments = append(t.comments, color.RedString("record should have been marked invalid: ")+e.match.String())
+				return result.withErr(errors.Errorf("record check failed: %s", msg))
 			}
 		}
 	}
-	l("published data looks correct")
+	result.log("published data looks correct")
 
-	return nil
+	return result
 }
 
 func checkSchemaIn(want plugin.Schema, in []*plugin.Schema) (namesMatch bool, typesMatch bool) {
