@@ -51,3 +51,9 @@ It should also provide good, helpful error messages when things go wrong, and it
 4. Sophistication: The contract includes fields where you can place the inferred type of properties, and fields for indicating that 
 a record does not conform to the inferred schema. Consider population of these fields extra credit - it may be very 
  difficult (or impossible) to accurately infer the correct values, but we will be impressed if you can.
+ 
+We're hoping this challenge will help you demonstrate that you are able to learn new frameworks quickly, build out a project from scratch based on a rough set of specs, and write production-quality code. If we schedule an interview, we'll use your solution to drive a conversation about your code, as well as latent issues that you might have found in the contract itself and the way the plugin system works.
+
+If you find that the test harness is doing something wrong, or you're completely stuck on how to solve something, file an issue against this repo. If you can send a pull request to improve the test harness that would be even better.
+
+(Please don't judge the quality of the code in host.go too harshly; it was written in a hurry with a lot of "help" from a four year old. We'll try to clean it up in the future.)
