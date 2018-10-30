@@ -7,24 +7,34 @@ In this code challenge you will construct a simplified version of the kind of pl
 Our plugin framework uses gRPC for communication. In reality we use the Hashicorp [go-plugin](https://github.com/hashicorp/go-plugin) framework, but
 for this challenge we will just use plain gRPC.
 
-Using a language with [gRPC support](https://grpc.io/docs/), you must produce a CLI app which will satisfy the plugin protocol defined below.
+Using a language with [gRPC support](https://grpc.io/docs/), you must produce a CLI app which will satisfy the plugin protocol defined below. Your app will act as the gRPC server.
 
-This directory contains a fake plugin host which will run your plugin. The
+This directory contains a fake plugin host which will run your plugin and call it as a gRPC client. The
 host is a CLI app which you can run using Go (Go 1.11 required, see here: https://golang.org/doc/install)
 
-```
+```bash
 go run host.go {command to start your program}
 ```
 
-For example, if your plugin implementation was a binary named `impl` in the same directory as host.go, you would run 
-```
+The host will run your app using the command you pass to it, and will exercise it by making calls over gRPC.
+
+For example, if your plugin implementation were a binary named `impl` in the same directory as host.go, you would run 
+```bash
 go run host.go ./impl
 ```
-The command must be run in the root of this repository, as the host expects to find the ./data directory in its PWD.
 
-If invoking your implementation is complex, consider creating a shell script which handles the invokation and passing that script to host.go.
+> The command must be run in the root of this repository, as the host expects to find the ./data directory in its $PWD.
 
-The host will run your app using the command you pass to it, and will exercise it by making calls over gRPC.
+If invoking your implementation is complex, consider creating a shell script which handles the invocation and passing that script to host.go.
+
+If your implementation has extensive environmental dependencies (i.e., Python versions or .NET Core),
+please use the Dockerfile to build a run context. Just install your dependencies and build your implementation
+after the ENTRYPOINT directive and set the CMD to invoke your implementation. Then test your command by
+
+```bash
+docker run -it --rm $(docker build -q .)
+```
+
 
 ### Plugin Protocol
 
@@ -47,7 +57,9 @@ For details about the contract, see the comments in [./plugin.proto](./plugin.pr
 
 ### Workflow
 
-If you want to attempt this challenge, fork this repo, push your solution, then send a pull request for us to review. Looking at other people's pull requests before you've completed your own solution is rude. 
+If you want to attempt this challenge, fork this repo, push your solution, then send a pull request for us to review. If your solution has dependencies, please explain how to install them in your pull request, or use the Dockerfile to provide a self-contained context.
+ 
+>Looking at other people's pull requests before you've completed your own solution is rude. 
 
 Your solution will be evaluated on several dimensions:
 
