@@ -123,5 +123,12 @@ message PublishRecord {
     string error = 2;
     // Data contains the values for a single record.
     // The values should be provided as a JSON serialized array.
+    // For example, if the CSV has a row
+    // 17,Alabama,true
+    // then the data field should contain the string
+    // "[17,\"Alabama\",true]"
+    // however, if you have not inferred the types of the properties,
+    // it's OK to make everything a string, which would be
+    // "[\"17\",\"Alabama\",\"true\"]"
     string data = 3;
 }
