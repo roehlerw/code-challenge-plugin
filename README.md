@@ -52,7 +52,7 @@ It should also provide good, helpful error messages when things go wrong, and it
 a record does not conform to the inferred schema. Consider population of these fields extra credit - it may be very 
  difficult (or impossible) to accurately infer the correct values, but we will be impressed if you can.
  
-We're hoping this challenge will help you demonstrate that you are able to learn new frameworks quickly, build out a project from scratch based on a rough set of specs, and write production-quality code. If we schedule an interview, we'll use your solution to drive a conversation about your code, as well as latent issues that you might have found in the contract itself and the way the plugin system works.
+We're hoping this challenge will help you demonstrate that you are able to learn new frameworks quickly, build out a project from scratch based on a rough set of specs, and write production-quality code. If we schedule an interview, we'll use your solution to drive a conversation about your code, as well as potential issues that you might have found in the contract itself. Think about how you would improve and evolve this contract to add functionality in the future. 
 
 If you find that the test harness is doing something wrong, or you're completely stuck on how to solve something, file an issue against this repo. If you can send a pull request to improve the test harness that would be even better.
 
