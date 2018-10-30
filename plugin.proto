@@ -1,9 +1,52 @@
 syntax = "proto3";
 package plugin;
 
+// The Plugin service is implemented by plugins which are responsible for discovering
+// and publishing data. In this challenge the plugin will target CSV files, but Naveego
+// writes plugins against many different kinds of data sources.
+// 
+
+// One difficulty in creating a unified interface for interacting with multiple data sources
+// is that the configuration settings needed to connect to data sources can differ radically.
+// Naveego handles this by having each plugin define a JSONSchema for its settings,
+// then dynamically rendering a form based on that schema which the user is asked to fill in.
+// The resulting JSON object is then sent to the plugin for validation. In this challenge,
+// we'll keep things simple and just hardcode the settings the plugin needs.
+//
+// Another complication is that data sources differ in the degree to which their schemas
+// are discoverable. A SQL database usuaully provides metadata about the structure of tables,
+// but a NoSQL database may not have any structure defined, and a collection of CSV files
+// may provide a minimal structure by having headers, but with no type information.
+// We handle that variation by providing a UI where a user can strongly specify the available
+// schemas in collaboration with the plugin. The user provides some basic connection or
+// selection information - such as a database name or a file path - and the plugin uses that
+// to do its best to discover the schemas of the available data. We refer to this as the "discovery"
+// phase. The user can then look at the discovered schemas, usually along with a sample of the
+// data from the data source, and can assign types (like number, date, or boolean) to the 
+// properties of the schema, as well as annotating the properties with clear names and descriptions.
+// The schemas authored by technical users are then made available to business users who can use
+// them to construct their business-level data collection and merge flows.
+// 
+// To help users, we'd like to be able to heuristically infer the types of properties that are
+// discovered in data sources which do not provide strong type information. If you find
+// implementing a passing solution not challenging enough, try adding some type inference logic
+// which will examine the values in the data source in order to specify the types without user
+// intervention. This may be tricky, since some records may have invalid data. If you've provided 
+// inferred types during discovery, you can mark records with bad data as invalid, but you
+// should still publish the record.
+
 service Plugin {
+    // The Discover method is responsible for taking the provided settings
+    // and using them to find and describe all the schemas which the settings make available.
+    // In this case, the plugin will look for CSV files which match a pattern.
     rpc Discover (DiscoverRequest) returns (DiscoverResponse) {
     }
+    
+    // The Publish method is responsible for collecting all the records
+    // which belong to a single schema and streaming them back to the host.
+    // The schema which is passed in will be one of the schemas returned by the
+    // Discover method, so you can share data between Discover and Publish by 
+    // means of the `settings` string on the Schema message.
     rpc Publish (PublishRequest) returns (stream PublishRecord) {
     }
 }
