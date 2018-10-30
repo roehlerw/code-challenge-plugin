@@ -56,7 +56,7 @@ func main() {
 
 	select {
 	case <-time.After(pluginStartupTimeout):
-		log.Fatalf("did not get a port from the plugin witlog.Printfn timeout of %s", pluginStartupTimeout)
+		log.Fatalf("did not get a port from the plugin within timeout of %s", pluginStartupTimeout)
 	case exitCode := <-exitCh:
 		if exitCode != 0 {
 			log.Fatalf("plugin exited with non-zero code %d", exitCode)
@@ -129,10 +129,10 @@ func runTests(port int) error {
 	failCount := 0
 
 	for i, t := range tests {
-		log.Printf("%d/%d: executing test %q", i+1, total, t.name)
-		log.Printf("description: %s", t.description)
+		log.Printf("%d/%d: executing test %q", i+1, total, t.name())
+		log.Printf("description: %s", t.description())
 		flog.Println(strings.Repeat("-", 50))
-		flog.Print(t.name)
+		flog.Print(t.name())
 		flog.Println(strings.Repeat("-", 50))
 
 		result := t.execute(client)
@@ -315,8 +315,8 @@ func (t *testResult) comment(format string, args ...interface{}) *testResult {
 	return t
 }
 
-func (c *testResult) log(format string, args ...interface{}) {
-	log.Printf(color.CyanString(c.test.name()+": ")+format, args...)
+func (t *testResult) log(format string, args ...interface{}) {
+	log.Printf(color.CyanString(t.test.name()+": ")+format, args...)
 }
 
 type recordCheck struct {
