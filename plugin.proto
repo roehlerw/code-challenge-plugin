@@ -14,7 +14,7 @@ package plugin;
 // we'll keep things simple and just hardcode the settings the plugin needs.
 //
 // Another complication is that data sources differ in the degree to which their schemas
-// are discoverable. A SQL database usuaully provides metadata about the structure of tables,
+// are discoverable. A SQL database usually provides metadata about the structure of tables,
 // but a NoSQL database may not have any structure defined, and a collection of CSV files
 // may provide a minimal structure by having headers, but with no type information.
 // We handle that variation by providing a UI where a user can strongly specify the available
