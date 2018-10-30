@@ -43,7 +43,7 @@ If you want to attempt this challenge, fork this repo, push your solution, then 
 
 Your solution will be evaluated on several dimensions:
 
-1. Accuracy: Your code should pass the tests as run by the host. 
+1. Accuracy: Your code should pass the tests as run by the host. Note that it's ok if some of the results show in red, as long as the final result is PASSED.
 2. Clarity: Your code should be easy to understand and read. It should also be easy to extend in the future,
 as plugin contracts evolve.
 3. Production readiness: Your code should provide sufficient logging information to support debugging production issues. 
@@ -56,4 +56,4 @@ We're hoping this challenge will help you demonstrate that you are able to learn
 
 If you find that the test harness is doing something wrong, or you're completely stuck on how to solve something, file an issue against this repo. If you can send a pull request to improve the test harness that would be even better.
 
-(Please don't judge the quality of the code in host.go too harshly; it was written in a hurry with a lot of "help" from a four year old. We'll try to clean it up in the future.)
+(Please don't judge the quality of the code in host.go too harshly; it was written in a hurry with a lot of ⸢help⸣ from a four year old. We'll try to clean it up in the future.)
