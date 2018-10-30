@@ -139,9 +139,9 @@ func runTests(port int) error {
 		result.test = t
 		if result.err != nil {
 			failCount++
-			log.Print(color.RedString("test %s failed: %s"), t.name(), result.err)
+			log.Printf(color.RedString("test %s failed: %s"), t.name(), result.err)
 		} else {
-			log.Print(color.GreenString("test %s passed"), t.name())
+			log.Printf(color.GreenString("test %s passed"), t.name())
 		}
 		results = append(results, result)
 	}
