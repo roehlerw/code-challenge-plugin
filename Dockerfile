@@ -16,12 +16,7 @@ ENTRYPOINT ["go", "run", "host.go"]
 
 # Build your implementation here
 
-ADD ./goplugin ./goplugin
 
-WORKDIR /code-challenge-plugin/goplugin
-RUN go install
-
-WORKDIR /code-challenge-plugin
 
 # Put your implementation here
-CMD ["goplugin"]
+CMD ["plugin"]
