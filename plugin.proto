@@ -88,7 +88,8 @@ message Schema {
     // Hint: this is a good place to store the file paths of all the
     // files which contain records with this schema.
     string settings = 2;
-    // Array of the properties discovered for this schema.
+    // Array of the properties discovered for this schema,
+    // in the order they have in the CSV.
     repeated Property properties = 3;
 }
 
@@ -97,11 +98,15 @@ message Property {
     string name = 1;
     // Type of the property; can be "string", "number", "datetime", "boolean"
     // This should be inferred if possible by analyzing the data.
+    // This is an optional part of the challenge; you can pass the tests
+    // without populating this field.
     string type = 2;
 }
 
 message PublishRequest {
+    // The settings will be the same as the settings sent to the Discover method.
     Settings settings = 1;
+    // The schema will be one of the schemas returned by the Discover method.
     Schema schema = 2;
 }
 
@@ -113,6 +118,8 @@ message PublishRecord {
 
     // If the record is invalid this field should explain why.
     // This should include the property name and the original value.
+    // This is a user-directed (as opposed to machine-readable) field,
+    // so you can format it however you want.
     string error = 2;
     // Data contains the values for a single record.
     // The values should be provided as a JSON serialized array.
