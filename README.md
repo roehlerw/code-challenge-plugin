@@ -16,6 +16,14 @@ host is a CLI app which you can run using Go (Go 1.11 required, see here: https:
 go run host.go {command to start your program}
 ```
 
+For example, if your plugin implementation was a binary named `impl` in the same directory as host.go, you would run 
+```
+go run host.go ./impl
+```
+The command must be run in the root of this repository, as the host expects to find the ./data directory in its PWD.
+
+If invoking your implementation is complex, consider creating a shell script which handles the invokation and passing that script to host.go.
+
 The host will run your app using the command you pass to it, and will exercise it by making calls over gRPC.
 
 ### Plugin Protocol
