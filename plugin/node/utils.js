@@ -24,7 +24,8 @@ var getType = function getType(property) {
         }
     }
     // try boolean
-    else if (property.toLowerCase() == 'true' || property.toLowerCase() == 'false') {
+    else if (property.toLowerCase() == 'true' || property.toLowerCase() == 'false' ||
+        property.toLowerCase() == 't' || property.toLowerCase() == 'f') {
         return 'boolean';
     }
     // try datetime
@@ -48,7 +49,8 @@ var convertToType = function convertToType(data, type) {
         case 'number':
             return parseFloat(data);
         case 'boolean':
-            return (data.toLowerCase() == 'true' || data.toLowerCase() == 'false');
+            return (data.toLowerCase() == 'true' || data.toLowerCase() == 'false' ||
+                data.toLowerCase() == 't' || data.toLowerCase() == 'f');
         case 'datetime':
             var output = new Date(data);
             output.setUTCHours(0, 0, 0, 0);
@@ -95,13 +97,73 @@ var getSchema = function getSchema(filepath) {
             .then((data) => {
                 var row = data[0];
                 var keys = Object.keys(row);
-                var values = Object.values(row);
+                var values;
+                /** 
+                 * Array of type count arrays for each column
+                 * typeCount array indexes
+                 * 0: integer
+                 * 1: number
+                 * 2: boolean
+                 * 3: datetime
+                 * 4: string
+                */
+                var typeCountArray = [];
+                for (var i in keys) {
+                    typeCountArray[i] = [0, 0, 0, 0, 0];
+                }
+
                 var properties = [];
 
-                for (var i in keys) {
+                // Check all the data rows and choose the most common type for each column
+                for (var i in data) {
+                    row = data[i];
+                    values = Object.values(row);
+
+                    for (var j in values) {
+                        switch (getType(values[j])) {
+                            case 'integer':
+                                typeCountArray[j][0]++;
+                                break;
+                            case 'number':
+                                typeCountArray[j][1]++;
+                                break;
+                            case 'boolean':
+                                typeCountArray[j][2]++;
+                                break;
+                            case 'datetime':
+                                typeCountArray[j][3]++;
+                                break;
+                            case 'string':
+                                typeCountArray[j][4]++;
+                                break;
+                        }
+                    }
+                }
+
+                for (var i in typeCountArray) {
+                    var typeIndex = getIndexOfMax(typeCountArray[i]);
+                    var type;
+                    switch (typeIndex) {
+                        case 0:
+                            type = 'integer';
+                            break;
+                        case 1:
+                            type = 'number';
+                            break;
+                        case 2:
+                            type = 'boolean';
+                            break;
+                        case 3:
+                            type = 'datetime';
+                            break;
+                        case 4:
+                            type = 'string';
+                            break;
+                    }
+
                     properties.push({
                         name: keys[i],
-                        type: getType(values[i])
+                        type: type
                     });
                 }
 
@@ -135,28 +197,31 @@ var publishFile = function publishFile(filepath, call) {
             .then((data) => {
                 for (var i in data) {
                     var row = data[i];
-                    var validCheck = checkValidTypes(row, schema.properties);
 
-                    for (var j in row) {
-                        if (j != validCheck.index) {
-                            row[j] = convertToType(row[j], types[j]);
+                    if (row.length == types.length) {
+                        var validCheck = checkValidTypes(row, schema.properties);
+
+                        for (var j in row) {
+                            if (j != validCheck.index) {
+                                row[j] = convertToType(row[j], types[j]);
+                            }
                         }
-                    }
 
-                    if (validCheck.invalid) {
-                        row[validCheck.index] = null;
-                        call.write({
-                            invalid: true,
-                            error: validCheck.error,
-                            data: JSON.stringify(row)
-                        });
-                    }
-                    else {
-                        call.write({
-                            invalid: false,
-                            error: null,
-                            data: JSON.stringify(row)
-                        });
+                        if (validCheck.invalid) {
+                            row[validCheck.index] = null;
+                            call.write({
+                                invalid: true,
+                                error: validCheck.error,
+                                data: JSON.stringify(row)
+                            });
+                        }
+                        else {
+                            call.write({
+                                invalid: false,
+                                error: null,
+                                data: JSON.stringify(row)
+                            });
+                        }
                     }
                 }
 
@@ -234,3 +299,25 @@ var getPropertyTypes = function getPropertyTypes(properties) {
     return output;
 }
 module.exports.getPropertyTypes = getPropertyTypes;
+
+/**
+ * Gets the index of the largest value in the array
+ */
+var getIndexOfMax = function getIndexOfMax(arr) {
+    if (arr.length === 0) {
+        return -1;
+    }
+
+    var max = arr[0];
+    var maxIndex = 0;
+
+    for (var i = 1; i < arr.length; i++) {
+        if (arr[i] > max) {
+            maxIndex = i;
+            max = arr[i];
+        }
+    }
+
+    return maxIndex;
+}
+module.exports.getIndexOfMax = getIndexOfMax;
