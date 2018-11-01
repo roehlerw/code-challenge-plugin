@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"io"
 	golog "log"
+	"math"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -72,7 +73,7 @@ func main() {
 
 func runTests(port int) error {
 	addr := fmt.Sprintf("localhost:%d", port)
-	ctx, _ := context.WithTimeout(context.Background(), 1 * time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
 	conn, err := grpc.DialContext(ctx, addr, grpc.WithInsecure(), grpc.WithBlock(), grpc.WithReadBufferSize(500))
 	if err != nil {
 		return errors.WithMessage(err, "connection failed")
@@ -91,9 +92,9 @@ func runTests(port int) error {
 			expectedSchemas: []plugin.Schema{schemaAnimals},
 			recordChecks: expectedRecords{
 				requiredRecordCheck(1, "Vulpes chama"),
-				bonusRecordCheck(1, "Macropus fuliginosus", true, " because blue is not a valid boolean"),
-				bonusRecordCheck(0, float64(52), false, " because id column should be parsed as number"),
-				bonusRecordCheck(3, "1796-07-23T00:00:00Z", false, ` because "last spotted" column should be parsed as date`),
+				invalidRecordCheck(1, "Macropus fuliginosus", " because blue is not a valid boolean"),
+				parsingRecordCheck(0, float64(52), 0, float64(52), " because id column should be parsed as number"),
+				parsingRecordCheck(0, float64(83), 3, timeFromRFC3339String("1796-07-23T00:00:00.000Z"), ` because "last spotted" column should be parsed as date`),
 			},
 		},
 		&standardTestCase{
@@ -106,7 +107,7 @@ func runTests(port int) error {
 			recordChecks: expectedRecords{
 				requiredRecordCheck(1, "社會科學院語學研究所"),
 				requiredRecordCheck(1, "Ω≈ç√∫˜µ≤≥÷"),
-				bonusRecordCheck(2, float64(27.78092), false, " because magnitude should be parsed as number"),
+				parsingRecordCheck(1, "normal", 2, float64(27.78092), " because magnitude should be parsed as number"),
 			},
 		},
 		&standardTestCase{
@@ -120,6 +121,22 @@ func runTests(port int) error {
 				requiredRecordCheck(3, "lroylr4@indiatimes.com"),
 				requiredRecordCheck(3, "mbranstoncs@mit.edu"),
 				requiredRecordCheck(3, "bmageei@linkedin.com"),
+			},
+		},
+		&standardTestCase{
+			n:               "garbage",
+			d:               `This test checks if any types have been inferred from a very unclean data set.`,
+			glob:            filepath.Join(pwd, "./data/garbage.csv"),
+			expectedCount:   10,
+			publishSchema:   schemaGarbage,
+			expectedSchemas: []plugin.Schema{schemaGarbage},
+			recordChecks: expectedRecords{
+				requiredRecordCheck(0, "a"),
+				parsingRecordCheck(0, "a", 1, "1", " because 'interleaved' column should be inferred to be a string"),
+				parsingRecordCheck(0, "b", 2, nil, " because 'count' column should be inferred to be a number, and 'seventeen' is not a valid number"),
+				parsingRecordCheck(0, "d", 3, true, " because 'is' column should be inferred to be a boolean, and 'True' is reasonably parsable as a boolean"),
+				parsingRecordCheck(0, "g", 4, "12", " because 'math' column should be inferred to be a string"),
+				parsingRecordCheck(0, "i", 6, timeFromRFC3339String("1970-01-06T16:57:07.445Z"), " because 'epoch' column could be inferred to be a date, maybe"),
 			},
 		},
 	}
@@ -166,11 +183,19 @@ func runTests(port int) error {
 		good.Println("PASSED")
 		return nil
 	} else {
-		bad.Printf("%d TESTS FAILED", failCount)
+		bad.Printf("%d TESTS FAILED\n", failCount)
 		color.Yellow("see .log file for all data processed")
 
 		return errors.New("failed")
 	}
+}
+
+func timeFromRFC3339String(t string) time.Time {
+	parsed, err := time.Parse(time.RFC3339Nano, t)
+	if err != nil {
+		panic(fmt.Sprintf("Write the date correctly, %q isn't valid: %s", t, err))
+	}
+	return parsed
 }
 
 func handleUserExit(cmd *exec.Cmd) {
@@ -256,6 +281,33 @@ var schemaAnimals = plugin.Schema{
 		},
 	},
 }
+var schemaGarbage = plugin.Schema{
+	Name: "garbage",
+	Properties: []*plugin.Property{
+		{
+			Name: "key",
+			Type: "string",
+		}, {
+			Name: "interleaved",
+			Type: "string",
+		}, {
+			Name: "count",
+			Type: "integer",
+		}, {
+			Name: "is",
+			Type: "boolean",
+		}, {
+			Name: "math",
+			Type: "string",
+		}, {
+			Name: "result",
+			Type: "number",
+		}, {
+			Name: "epoch",
+			Type: "date",
+		},
+	},
+}
 var schemaLogs = plugin.Schema{
 	Name: "logs",
 	Properties: []*plugin.Property{
@@ -322,10 +374,14 @@ func (t *testResult) log(format string, args ...interface{}) {
 type recordCheck struct {
 	matchIndex      int
 	matchValue      interface{}
+	isParseCheck    bool
+	checkIndex      int
+	checkValue      interface{}
 	isBonus         bool
 	shouldBeInvalid bool
 	match           *plugin.PublishRecord
 	reason          string
+	parseErr        error
 }
 
 func requiredRecordCheck(index int, value interface{}) *recordCheck {
@@ -335,13 +391,25 @@ func requiredRecordCheck(index int, value interface{}) *recordCheck {
 	}
 }
 
-func bonusRecordCheck(index int, value interface{}, invalid bool, reason string) *recordCheck {
+func invalidRecordCheck(index int, value interface{}, reason string) *recordCheck {
 	return &recordCheck{
 		matchIndex:      index,
 		matchValue:      value,
 		isBonus:         true,
-		shouldBeInvalid: invalid,
+		shouldBeInvalid: true,
 		reason:          reason,
+	}
+}
+
+func parsingRecordCheck(keyIndex int, keyValue interface{}, checkIndex int, checkValue interface{}, reason string) *recordCheck {
+	return &recordCheck{
+		matchIndex:   keyIndex,
+		matchValue:   keyValue,
+		checkIndex:   checkIndex,
+		checkValue:   checkValue,
+		isParseCheck: true,
+		isBonus:      true,
+		reason:       reason,
 	}
 }
 
@@ -349,9 +417,60 @@ func (r *recordCheck) evaluate(record *plugin.PublishRecord, data []interface{})
 	if r.match != nil {
 		return
 	}
-	if data[r.matchIndex] == r.matchValue {
+	if r.matchIndex >= len(record.Data) {
+		return
+	}
+
+	actual := data[r.matchIndex]
+	if actual == r.matchValue {
 		r.match = record
 	}
+
+	r.parseErr = r.evaluateParsing(record, data)
+}
+
+func (r *recordCheck) evaluateParsing(record *plugin.PublishRecord, data []interface{}) error {
+	if !r.isParseCheck {
+		return nil
+	}
+	if r.checkIndex >= len(record.Data) {
+		return errors.New("record too narrow")
+	}
+
+	actual := data[r.checkIndex]
+	if actual == nil {
+		if r.checkValue == nil {
+			return nil
+		} else {
+			return errors.Errorf("expected value at %s to be nil/null", r.checkIndex)
+		}
+	}
+
+	switch expectedValue := r.checkValue.(type) {
+	case time.Time:
+		actualString, _ := actual.(string)
+		actualTime, err := time.Parse(time.RFC3339Nano, actualString)
+		if err != nil {
+			return errors.Errorf("expected value at %d to be valid date: %s", r.checkIndex, err)
+		}
+		if actualTime != expectedValue {
+			return errors.Errorf("expected value at %d to equal %v but it was %v", r.checkIndex, expectedValue, actualTime)
+		}
+	case float64:
+		actualFloat, ok := actual.(float64)
+		if !ok  {
+			return errors.Errorf("expected value at %d (%v) to be a number, but it was a %T", r.checkIndex, actual, actual)
+		}
+		if diff := math.Abs(actualFloat - expectedValue); diff > 0.00001 {
+			return errors.Errorf("expected value at %d to equal %v but it was %v", r.checkIndex, expectedValue, actualFloat)
+		}
+	default:
+		if actual != r.matchValue {
+			return errors.Errorf("expected value at %d to equal %v (%T) but it was %v (%T)", r.checkIndex, expectedValue, expectedValue, actual, actual)
+		}
+	}
+
+	return nil
 }
 
 func (r *recordCheck) result() (ok bool, msg string) {
@@ -364,10 +483,15 @@ func (r *recordCheck) result() (ok bool, msg string) {
 			} else {
 				return false, color.RedString("record should have been marked invalid%s: { %s }", r.reason, r.match)
 			}
-		} else {
-			return true, color.GreenString("detected invalid record { %s }", r.match)
+		} else if r.isParseCheck {
+			if r.parseErr == nil {
+				return true, color.GreenString("correctly parsed record { %s }", r.match)
+			} else {
+				return true, color.RedString("parsing failed on record { %s }: %s", r.match, r.parseErr)
+			}
 		}
 	}
+	return true, ""
 }
 
 type expectedRecords []*recordCheck
@@ -376,9 +500,7 @@ func (r expectedRecords) evaluate(record *plugin.PublishRecord) {
 	var data []interface{}
 	json.Unmarshal([]byte(record.Data), &data)
 	for _, expected := range r {
-		if data[expected.matchIndex] == expected.matchValue {
-			expected.match = record
-		}
+		expected.evaluate(record, data)
 	}
 }
 
@@ -406,14 +528,24 @@ func (t *standardTestCase) execute(client plugin.PluginClient) *testResult {
 	flog.Println(string(j))
 
 	for _, want := range t.expectedSchemas {
-		namesMatch, typesMatch := checkSchemaIn(want, discover.Schemas)
+		namesMatch, typesMatch, got := checkSchemaIn(want, discover.Schemas)
 		if !namesMatch {
 			return result.withErr(errors.Errorf("no schema matclng %q was discovered (want: %s, got: %s)", want.Name, want, discover.Schemas))
 		}
 		if typesMatch {
 			result.comment(color.GreenString("inferred types on schema %s: ", want.Name) + want.String())
 		} else {
-			result.comment(color.RedString("did not infer types on schema %s: ", want.Name) + want.String())
+
+			w := new(strings.Builder)
+			for i := range got.Properties {
+				wp := want.Properties[i]
+				gp := got.Properties[i]
+				if wp.Type != gp.Type {
+					fmt.Fprintf(w, "%s: wanted %s, got %s; ", wp.Name, color.GreenString(wp.Type), color.RedString(gp.Type))
+				}
+			}
+
+			result.comment(color.RedString("did not infer types on schema %s: ", want.Name) + w.String())
 		}
 	}
 	result.log("discover looks correct")
@@ -444,11 +576,6 @@ func (t *standardTestCase) execute(client plugin.PluginClient) *testResult {
 		j, _ = json.MarshalIndent(record, "", "  ")
 		flog.Println(string(j))
 		t.recordChecks.evaluate(record)
-
-		if count == 10 {
-			result.log("pausing for 1 seconds")
-			<-time.After(1*time.Second)
-		}
 	}
 	result.log("publish completed, analyzing data...")
 
@@ -475,15 +602,17 @@ func (t *standardTestCase) execute(client plugin.PluginClient) *testResult {
 	return result
 }
 
-func checkSchemaIn(want plugin.Schema, in []*plugin.Schema) (namesMatch bool, typesMatch bool) {
+var mismatch = color.New(color.CrossedOut, color.FgRed)
+
+func checkSchemaIn(want plugin.Schema, in []*plugin.Schema) (namesMatch bool, typesMatch bool, found *plugin.Schema) {
 
 	for _, found := range in {
 		if namesMatch, typesMatch = checkSchema(want, found); namesMatch {
-			return
+			return namesMatch, typesMatch, found
 		}
 	}
 
-	return false, false
+	return false, false, nil
 }
 
 func findSchemaIn(want plugin.Schema, in []*plugin.Schema) (found *plugin.Schema) {
@@ -512,42 +641,3 @@ func checkSchema(want plugin.Schema, have *plugin.Schema) (namesMatch bool, type
 	}
 	return
 }
-
-
-//
-//
-// type funcTestCase struct {
-// 	n string
-// 	d string
-// 	fn func(client plugin.PluginClient) (*testResult)
-// }
-//
-// func (t funcTestCase) execute(client plugin.PluginClient) (*testResult) {
-// 	return t.fn(client)
-// }
-//
-// func (t funcTestCase) name() string {
-// 	return t.n
-// }
-//
-// func (t funcTestCase) description() string {
-// 	return t.d
-// }
-//
-// func cancelTestImpl(client plugin.PluginClient) (*testResult) {
-// 	return nil
-// }
-//
-//
-// func getPeopleSchema(client plugin.PluginClient) (*plugin.Schema, error) {
-// 	settings := &plugin.Settings{
-// 		FileGlob: "data/people.1.csv",
-// 	}
-// 	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
-// 	discover, err := client.Discover(ctx, &plugin.DiscoverRequest{
-// 		Settings: settings,
-// 	})
-// 	if err != nil {
-// 		return nil, errors.WithMessage(err, "discovery failed")
-// 	}
-// }
