@@ -70,7 +70,8 @@ as plugin contracts evolve.
 It should also provide good, helpful error messages when things go wrong, and it should try very hard not to silently crash.
 4. Sophistication: The contract includes fields where you can place the inferred type of properties, and fields for indicating that 
 a record does not conform to the inferred schema. Consider population of these fields extra credit - it may be very 
- difficult (or impossible) to accurately infer the correct values, but we will be impressed if you can.
+ difficult (or impossible) to accurately infer the correct values, but we will be impressed if you can. In particular,
+ the file [./data/garbage.csv](./data/garbage.csv) will be difficult to make inferences about.
  
 We're hoping this challenge will help you demonstrate that you are able to learn new frameworks quickly, build out a project from scratch based on a rough set of specs, and write production-quality code. If we schedule an interview, we'll use your solution to drive a conversation about your code, as well as potential issues that you might have found in the contract itself. Think about how you would improve and evolve this contract to add functionality in the future. 
 
