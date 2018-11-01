@@ -96,7 +96,7 @@ message Schema {
 message Property {
     // Name of the property, from the column header.
     string name = 1;
-    // Type of the property; can be "string", "number", "datetime", "boolean"
+    // Type of the property; can be "string", "integer", "number", "datetime", "boolean"
     // This should be inferred if possible by analyzing the data.
     // This is an optional part of the challenge; you can pass the tests
     // without populating this field.

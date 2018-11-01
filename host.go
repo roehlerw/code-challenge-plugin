@@ -85,7 +85,7 @@ func runTests(port int) error {
 	tests := []test{
 		&standardTestCase{
 			n:               "animals",
-			d:               `This test exercises schema type discovery, because "animals.csv" has multiple data types`,
+			d:               `This test gently exercises schema type discovery, because "animals.csv" has multiple data types and mostly valid values`,
 			glob:            filepath.Join(pwd, "./data/animals.csv"),
 			expectedCount:   100,
 			publishSchema:   schemaAnimals,
@@ -125,7 +125,7 @@ func runTests(port int) error {
 		},
 		&standardTestCase{
 			n:               "garbage",
-			d:               `This test checks if any types have been inferred from a very unclean data set.`,
+			d:               `This test checks if any types have been inferred from a very unclean and invalid data set.`,
 			glob:            filepath.Join(pwd, "./data/garbage.csv"),
 			expectedCount:   10,
 			publishSchema:   schemaGarbage,
