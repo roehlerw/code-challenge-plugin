@@ -78,3 +78,5 @@ We're hoping this challenge will help you demonstrate that you are able to learn
 If you find that the test harness is doing something wrong, or you're completely stuck on how to solve something, file an issue against this repo. If you can send a pull request to improve the test harness that would be even better.
 
 (Please don't judge the quality of the code in host.go too harshly; it was written in a hurry with a lot of ⸢help⸣ from a four year old. We'll try to clean it up in the future.)
+
+Sample message
